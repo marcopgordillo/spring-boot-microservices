@@ -17,6 +17,7 @@
         <module>config-server</module>
         <module>service-registry</module>
         <module>catalog-service</module>
+        <module>shoppingcart-ui</module>
     </modules>
 
 </project>

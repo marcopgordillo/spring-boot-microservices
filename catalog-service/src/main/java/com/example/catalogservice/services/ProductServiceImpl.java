@@ -2,28 +2,26 @@ package com.example.catalogservice.services;
 
 import com.example.catalogservice.entities.Product;
 import com.example.catalogservice.repositories.ProductRepository;
+import com.example.catalogservice.utils.MyThreadLocalsHolder;
 import com.example.catalogservice.web.models.ProductInventoryResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
-    private final RestTemplate restTemplate;
+    private final InventoryServiceClient inventoryServiceClient;
 
-    public ProductServiceImpl(ProductRepository productRepository, RestTemplate restTemplate) {
+    public ProductServiceImpl(ProductRepository productRepository, InventoryServiceClient inventoryServiceClient) {
         this.productRepository = productRepository;
-        this.restTemplate = restTemplate;
+        this.inventoryServiceClient = inventoryServiceClient;
     }
 
     @Override
@@ -35,20 +33,21 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public Optional<Product> findProductByCode(String code) {
+
         Optional<Product> productOptional = productRepository.findByCode(code);
-        if(productOptional.isPresent()) {
+        if (productOptional.isPresent()) {
+            String correlationId = UUID.randomUUID().toString();
+            MyThreadLocalsHolder.setCorrelationId(correlationId);
+
+            log.info("Before CorrelationID: " + MyThreadLocalsHolder.getCorrelationId());
             log.info("Fetching inventory level for product_code: " + code);
-            ResponseEntity<ProductInventoryResponse> itemResponseEntity =
-                    restTemplate.getForEntity("http://inventory-service/api/inventory/{code}",
-                            ProductInventoryResponse.class,
-                            code);
-            if(itemResponseEntity.getStatusCode() == HttpStatus.OK) {
-                Integer quantity = Objects.requireNonNull(itemResponseEntity.getBody()).getAvailableQuantity();
-                log.info("Available quantity: " + quantity);
+
+            Optional<ProductInventoryResponse> itemResponseEntity = this.inventoryServiceClient.getProductInventoryByCode(code);
+            if (itemResponseEntity.isPresent()) {
+                Integer quantity = itemResponseEntity.get().getAvailableQuantity();
                 productOptional.get().setInStock(quantity > 0);
-            } else {
-                log.error("Unable to get inventory level for product_code: " + code + ", StatusCode: " + itemResponseEntity.getStatusCode());
             }
+            log.info("After CorrelationID: "+ MyThreadLocalsHolder.getCorrelationId());
         }
         return productOptional;
     }

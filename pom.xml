@@ -16,7 +16,9 @@
     <modules>
         <module>config-server</module>
         <module>service-registry</module>
+        <module>inventory-service</module>
         <module>catalog-service</module>
+        <module>order-service</module>
         <module>shoppingcart-ui</module>
     </modules>
 
